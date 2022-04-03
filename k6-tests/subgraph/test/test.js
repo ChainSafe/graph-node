@@ -31,10 +31,10 @@ const waitForSubgraphToBeSynced = async () =>
         );
         console.log(`indexingStatuses response:`, result);
 
-        if (result.data.indexingStatuses[0].synced) {
+        if (result.indexingStatuses[0].synced) {
           console.log(`Subgraph is now in sync!`);
           resolve();
-        } else if (result.data.indexingStatuses[0].health != "healthy") {
+        } else if (result.indexingStatuses[0].health != "healthy") {
           console.log(`Not healthy!`);
           reject(new Error("Subgraph failed"));
         } else {
@@ -64,6 +64,7 @@ contract("Contract", (accounts) => {
       `Done, creating subgraph.yaml from template, based on contract address`
     );
 
+    console.log(`Creating some blocks...`);
     copyFileSync("subgraph.template.yaml", "subgraph.yaml");
 
     // Insert its address into subgraph manifest
@@ -73,6 +74,11 @@ contract("Contract", (accounts) => {
     exec(`yarn codegen`);
     exec(`yarn create:test`);
     exec(`yarn deploy:test`);
+
+    // Inject some data to the contract
+    await contract.setPurpose("test 1");
+    await contract.setPurpose("test 2");
+    await contract.setPurpose("test 3");
   });
 
   it("Subgraph should be in sync", async () => {

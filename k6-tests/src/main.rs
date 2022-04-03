@@ -1,4 +1,4 @@
-use std::{fs, io::stdin, path::PathBuf, sync::Arc};
+use std::{fs, path::PathBuf, sync::Arc};
 use tokio::process::Child;
 
 use anyhow::Context;
@@ -7,6 +7,7 @@ use graph_tests::{
     make_postgres_uri, run_graph_node, stop_graph_node, DockerTestClient, IntegrationTestSetup,
     TestContainerService,
 };
+use tokio::process::Command;
 
 struct PerformanceTestingEnvrionment {
     postgres: DockerTestClient,
@@ -106,7 +107,51 @@ impl PerformanceTestingEnvrionment {
             .expect("failed to locate `graph-node` program")
     }
 
-    async fn spawn_graph_node(&mut self) -> anyhow::Result<()> {
+    async fn run_k6(&self, test_setup: &IntegrationTestSetup) -> anyhow::Result<()> {
+        let output = Command::new("k6")
+            .arg("run")
+            .arg("./k6-tests/k6.js")
+            .env("GRAPHQL_PORT", test_setup.graph_node_ports.http.to_string())
+            .output()
+            .await
+            .context("failed to run k6 command")?;
+
+        println!(
+            "run_k6: stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+
+        Ok(())
+    }
+
+    async fn deploy_and_seed(&mut self, test_setup: &IntegrationTestSetup) -> anyhow::Result<()> {
+        let output = Command::new("yarn")
+            .arg("prepare")
+            .env("GANACHE_TEST_PORT", test_setup.ganache_port.to_string())
+            .env("GRAPH_NODE_ADMIN_URI", test_setup.graph_node_admin_uri())
+            .env(
+                "GRAPH_NODE_HTTP_PORT",
+                test_setup.graph_node_ports.http.to_string(),
+            )
+            .env(
+                "GRAPH_NODE_INDEX_PORT",
+                test_setup.graph_node_ports.index.to_string(),
+            )
+            .env("IPFS_URI", &test_setup.ipfs_uri)
+            .current_dir("./k6-tests/subgraph")
+            .output()
+            .await
+            .context("failed to run test command")?;
+
+        println!(
+            "deploy_and_seed: stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+
+        Ok(())
+    }
+
+    async fn spawn_graph_node(&mut self) -> anyhow::Result<IntegrationTestSetup> {
         let endpoints = self.endpoints().await?;
         let test_setup = IntegrationTestSetup {
             postgres_uri: endpoints.postgres,
@@ -122,7 +167,7 @@ impl PerformanceTestingEnvrionment {
 
         self.graph_node = Some(run_graph_node(&test_setup).await?);
 
-        Ok(())
+        Ok(test_setup)
     }
 
     async fn stop_graph_node(&mut self) -> anyhow::Result<()> {
@@ -167,12 +212,13 @@ async fn main() -> anyhow::Result<()> {
     test_env.create_db().await?;
 
     println!("Running graph-node in background...");
-    test_env.spawn_graph_node().await?;
+    let cfg = test_env.spawn_graph_node().await?;
 
-    println!("Ready, do your thing now, press enter to continue and remove all setup");
+    println!("Seeding Smart Contract and Subgraph...");
+    test_env.deploy_and_seed(&cfg).await?;
 
-    let mut s = String::new();
-    stdin().read_line(&mut s).expect("invalid input");
+    println!("Running K6 and executing performance testing....");
+    test_env.run_k6(&cfg).await?;
 
     println!("Stopping graph-node");
     test_env.stop_graph_node().await?;

@@ -36,8 +36,8 @@ pub async fn run_graph_node(test_setup: &IntegrationTestSetup) -> anyhow::Result
 
     let mut command = Command::new(test_setup.graph_node_bin.as_os_str());
     command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
         // postgres
         .arg("--postgres-url")
         .arg(&test_setup.postgres_uri)

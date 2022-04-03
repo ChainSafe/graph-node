@@ -28,3 +28,4 @@ export function handleSetPurpose(event: SetPurpose): void {
   purpose.save();
   sender.save();
 }
+

@@ -64,5 +64,5 @@ jobs:
           GITHUB_TOKEN: ${{secrets.GH_API_TOKEN}}
           GRAPHQL_HOSTNAME: "[::1]"
         with:
-          command: test
+          command: run
           args: --verbose --package k6-tests -- --nocapture

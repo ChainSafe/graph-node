@@ -54,7 +54,7 @@ impl StopwatchMetrics {
                     "deployment_sync_secs",
                     "total time spent syncing",
                     subgraph_id.as_str(),
-                    vec!["section".to_owned(), stage.clone()],
+                    vec!["section".to_owned(), "stage".to_owned()],
                 )
                 .unwrap_or_else(|_| {
                     panic!(
